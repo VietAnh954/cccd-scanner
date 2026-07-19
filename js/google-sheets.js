@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════
 // ▶▶▶  DÁN URL APPS SCRIPT ĐÃ DEPLOY VÀO ĐÂY  ◀◀◀
 // Ví dụ: 'https://script.google.com/macros/s/AKfyc.../exec'
-const DEFAULT_GS_URL = '';
+const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbxL7JQBomejGC33AUmFdPu1VHDJKO-NS0oDdQHwJrQ2ctMOK9c0Ry71Y-mLADRFLnCzSA/exec';
 // ═══════════════════════════════════════════════════════════════════
 
 const GS_URL_KEY = 'cccd_gs_url';
@@ -59,12 +59,12 @@ async function exportToGoogleSheets(records) {
 
   const payload = {
     records: records.map(r => ({
-      rawData:   r.rawData || '',
-      cccd:      r.cccd || '',
-      name:      r.name || '',
-      dob:       r.dob || '',
-      gender:    r.gender || '',
-      address:   r.address || '',
+      rawData: r.rawData || '',
+      cccd: r.cccd || '',
+      name: r.name || '',
+      dob: r.dob || '',
+      gender: r.gender || '',
+      address: r.address || '',
       issueDate: r.issueDate || '',
       scannedAt: r.scannedAt || '',
     })),
