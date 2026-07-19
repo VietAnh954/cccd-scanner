@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════
 // ▶▶▶  DÁN URL APPS SCRIPT ĐÃ DEPLOY VÀO ĐÂY  ◀◀◀
 // Ví dụ: 'https://script.google.com/macros/s/AKfyc.../exec'
-const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbxL7JQBomejGC33AUmFdPu1VHDJKO-NS0oDdQHwJrQ2ctMOK9c0Ry71Y-mLADRFLnCzSA/exec';
+const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbxnRNR8NelVBDSgp-GufXpQ81Zn0XxPfLt2V6gRNM03QBeq9D07r1O2WFW2KRJRlZMUPw/exec';
 // ═══════════════════════════════════════════════════════════════════
 
 const GS_URL_KEY = 'cccd_gs_url';
