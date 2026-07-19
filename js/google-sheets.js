@@ -3,45 +3,22 @@
 /**
  * Google Sheets export via Google Apps Script web app.
  *
- * SAU KHI DEPLOY Apps Script, dán URL vào DEFAULT_GS_URL bên dưới.
- * Khi đã set, mọi người dùng bấm "GG Sheets" đều push data lên
- * mà không cần nhập URL thủ công.
+ * CÁCH HOẠT ĐỘNG:
+ * Gửi từng bản ghi qua GET request (script tag) → không bị CORS,
+ * không bị mất data khi Google redirect 302 (nguyên nhân lỗi trên mobile).
+ *
+ * YÊU CẦU: Apps Script phải có hàm doGet(e) — xem hướng dẫn bên dưới.
  */
 
 // ═══════════════════════════════════════════════════════════════════
-// ▶▶▶  DÁN URL APPS SCRIPT ĐÃ DEPLOY VÀO ĐÂY  ◀◀◀
-const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbxnRNR8NelVBDSgp-GufXpQ81Zn0XxPfLt2V6gRNM03QBeq9D07r1O2WFW2KRJRlZMUPw/exec';
+// ▶▶▶  URL APPS SCRIPT ĐÃ DEPLOY  ◀◀◀
+const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbyXKC626WicppcUIfZudhOTyC8tixZmxs2hu-Rc7KOVGYZiaCYrsZ81OGne6QvNvABAPA/exec';
+
+
 // ═══════════════════════════════════════════════════════════════════
 
-const GS_URL_KEY = 'cccd_gs_url';
-
-function getGSUrl() {
-  return localStorage.getItem(GS_URL_KEY) || DEFAULT_GS_URL || '';
-}
-
-function setGSUrl(url) {
-  localStorage.setItem(GS_URL_KEY, url.trim());
-}
-
-function promptGSUrl() {
-  const current = getGSUrl();
-  const url = prompt(
-    'Dán URL Google Apps Script đã deploy:\n\n' +
-    '(Xem hướng dẫn trong file HUONG_DAN_CCCD_Scanner.docx)',
-    current
-  );
-  if (url === null) return null;
-  if (!url.trim()) {
-    showToast('URL không được để trống', 'warning');
-    return null;
-  }
-  if (!url.includes('script.google.com') && !url.includes('googleusercontent.com')) {
-    showToast('URL không hợp lệ — phải là URL Apps Script', 'error');
-    return null;
-  }
-  setGSUrl(url);
-  return url.trim();
-}
+// Xóa URL cũ trong localStorage (tránh dùng URL cũ từ phiên trước)
+try { localStorage.removeItem('cccd_gs_url'); } catch (_) { }
 
 async function exportToGoogleSheets(records) {
   if (!records || records.length === 0) {
@@ -49,132 +26,98 @@ async function exportToGoogleSheets(records) {
     return;
   }
 
-  let url = getGSUrl();
+  const url = DEFAULT_GS_URL;
   if (!url) {
-    url = promptGSUrl();
-    if (!url) return;
+    showToast('Chưa cài URL Apps Script trong google-sheets.js', 'error');
+    return;
   }
 
-  const payload = {
-    records: records.map(r => ({
-      rawData:   r.rawData || '',
-      cccd:      r.cccd || '',
-      name:      r.name || '',
-      dob:       r.dob || '',
-      gender:    r.gender || '',
-      address:   r.address || '',
+  const total = records.length;
+  showToast('Đang gửi ' + total + ' bản ghi lên Google Sheets...', '', 3000);
+
+  // ── Gửi từng bản ghi qua GET (script tag) ──
+  // Script tag LUÔN follow redirect 302 → không bị CORS → hoạt động trên mọi thiết bị
+  let sentCount = 0;
+
+  for (let i = 0; i < total; i++) {
+    const r = records[i];
+    const data = {
+      rawData: r.rawData || '',
+      cccd: r.cccd || '',
+      name: r.name || '',
+      dob: r.dob || '',
+      gender: r.gender || '',
+      address: r.address || '',
       issueDate: r.issueDate || '',
       scannedAt: r.scannedAt || '',
-    })),
-  };
+    };
 
-  showToast('Đang gửi lên Google Sheets...', '', 2500);
-
-  // Thử 3 phương thức: cors fetch → no-cors fetch → form submit
-  // Google Apps Script redirect (302) có thể làm mất POST body trên mobile
-
-  // ── Method 1: fetch cors (tốt nhất — đọc được response) ──
-  try {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
-      redirect: 'follow',
-    });
-    if (resp.ok) {
-      try {
-        const result = await resp.json();
-        if (result.success) {
-          showToast(`Đã gửi ${result.count || records.length} bản ghi ✓`, 'success', 3000);
-          return;
-        }
-      } catch (_) {
-        // response không phải JSON nhưng request thành công
-        showToast(`Đã gửi ${records.length} bản ghi ✓`, 'success', 3000);
-        return;
-      }
+    try {
+      await sendViaScriptTag(url, data);
+      sentCount++;
+    } catch (e) {
+      console.warn('[GS] Bản ghi', i + 1, 'lỗi:', e.message);
     }
-  } catch (e) {
-    console.warn('[GS] cors fetch failed:', e.message, '→ trying fallback...');
+
+    // Delay nhỏ giữa các request tránh rate limit
+    if (i < total - 1) {
+      await sleep(300);
+    }
   }
 
-  // ── Method 2: form submit qua hidden iframe (hoạt động mọi nơi) ──
-  try {
-    await submitViaForm(url, payload);
-    showToast(`Đã gửi ${records.length} bản ghi ✓`, 'success', 3000);
-    return;
-  } catch (e) {
-    console.warn('[GS] form submit failed:', e.message);
-  }
-
-  // ── Method 3: no-cors fetch (last resort) ──
-  try {
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
-    });
-    showToast(`Đã gửi ${records.length} bản ghi (chưa xác nhận)`, 'warning', 3000);
-  } catch (err) {
-    console.error('[GS] all methods failed:', err);
-    showToast('Lỗi gửi dữ liệu: ' + err.message, 'error', 4000);
-    if (confirm('Gửi thất bại. Bạn muốn nhập lại URL Apps Script?')) {
-      promptGSUrl();
-    }
+  // ── Kết quả ──
+  if (sentCount === total) {
+    showToast('Đã gửi ' + total + ' bản ghi lên Google Sheets ✓', 'success', 3000);
+  } else if (sentCount > 0) {
+    showToast('Đã gửi ' + sentCount + '/' + total + ' bản ghi.', 'warning', 4000);
+  } else {
+    showToast('Không gửi được. Kiểm tra Apps Script (cần có doGet + deploy lại).', 'error', 5000);
   }
 }
 
 /**
- * Gửi data qua hidden form + iframe.
- * Không bị ảnh hưởng bởi CORS hay redirect — hoạt động trên mọi browser/mobile.
+ * Gửi 1 bản ghi qua GET request bằng <script> tag.
+ * Script tag follow redirect 302 tự nhiên, không cần CORS headers.
+ * Response từ Apps Script không phải JS hợp lệ → onerror fire, nhưng
+ * server-side đã xử lý xong data trước khi trả response.
  */
-function submitViaForm(url, data) {
-  return new Promise((resolve, reject) => {
-    try {
-      const id = 'gs_frame_' + Date.now();
+function sendViaScriptTag(baseUrl, record) {
+  return new Promise(function (resolve, reject) {
+    var encoded = encodeURIComponent(JSON.stringify(record));
+    var fullUrl = baseUrl + '?data=' + encoded + '&_t=' + Date.now();
 
-      // Hidden iframe nhận response
-      const iframe = document.createElement('iframe');
-      iframe.name = id;
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
-
-      // Form gửi data
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = url;
-      form.target = id;
-      form.style.display = 'none';
-
-      // Apps Script đọc e.parameter.data
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'data';
-      input.value = JSON.stringify(data);
-      form.appendChild(input);
-
-      document.body.appendChild(form);
-      form.submit();
-
-      // Dọn dẹp sau 5s
-      setTimeout(() => {
-        try { document.body.removeChild(form); } catch (_) {}
-        try { document.body.removeChild(iframe); } catch (_) {}
-        resolve();
-      }, 5000);
-
-    } catch (e) {
-      reject(e);
+    // Kiểm tra URL length (giới hạn ~8000 ký tự)
+    if (fullUrl.length > 7500) {
+      reject(new Error('URL quá dài (' + fullUrl.length + ' chars)'));
+      return;
     }
+
+    var script = document.createElement('script');
+    script.src = fullUrl;
+
+    var timer = setTimeout(function () {
+      cleanup();
+      resolve(); // Timeout = request đã gửi, coi như thành công
+    }, 12000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      script.onload = script.onerror = null;
+      try { script.remove(); } catch (_) { }
+    }
+
+    // onload: response là JS hợp lệ (nếu Apps Script trả JSONP)
+    script.onload = function () { cleanup(); resolve(); };
+
+    // onerror: response không phải JS (JSON) → vẫn OK, data đã được ghi
+    script.onerror = function () { cleanup(); resolve(); };
+
+    document.head.appendChild(script);
   });
 }
 
-function resetGSUrl() {
-  localStorage.removeItem(GS_URL_KEY);
-  showToast('Đã xóa URL — sẽ dùng URL mặc định', 'warning');
+function sleep(ms) {
+  return new Promise(function (r) { setTimeout(r, ms); });
 }
 
 window.exportToGoogleSheets = exportToGoogleSheets;
-window.resetGSUrl = resetGSUrl;
-window.promptGSUrl = promptGSUrl;
