@@ -3,16 +3,22 @@
 /**
  * Google Sheets export via Google Apps Script web app.
  *
- * Flow:
- * 1. User deploys Apps Script (code provided in guide)
- * 2. Paste deployment URL vào app
- * 3. Bấm "Xuất GG Sheets" → data pushed lên sheet "VA"
+ * SAU KHI DEPLOY Apps Script, dán URL vào DEFAULT_GS_URL bên dưới.
+ * Khi đã set, mọi người dùng bấm "GG Sheets" đều push data lên
+ * mà không cần nhập URL thủ công.
  */
+
+// ═══════════════════════════════════════════════════════════════════
+// ▶▶▶  DÁN URL APPS SCRIPT ĐÃ DEPLOY VÀO ĐÂY  ◀◀◀
+// Ví dụ: 'https://script.google.com/macros/s/AKfyc.../exec'
+const DEFAULT_GS_URL = '';
+// ═══════════════════════════════════════════════════════════════════
 
 const GS_URL_KEY = 'cccd_gs_url';
 
 function getGSUrl() {
-  return localStorage.getItem(GS_URL_KEY) || '';
+  // Ưu tiên: localStorage (user override) → hardcoded default
+  return localStorage.getItem(GS_URL_KEY) || DEFAULT_GS_URL || '';
 }
 
 function setGSUrl(url) {
@@ -23,10 +29,10 @@ function promptGSUrl() {
   const current = getGSUrl();
   const url = prompt(
     'Dán URL Google Apps Script đã deploy:\n\n' +
-    '(Xem hướng dẫn cài đặt trong file HUONG_DAN.md)',
+    '(Xem hướng dẫn trong file HUONG_DAN_CCCD_Scanner.docx)',
     current
   );
-  if (url === null) return null; // cancelled
+  if (url === null) return null;
   if (!url.trim()) {
     showToast('URL không được để trống', 'warning');
     return null;
@@ -51,7 +57,6 @@ async function exportToGoogleSheets(records) {
     if (!url) return;
   }
 
-  // Prepare payload
   const payload = {
     records: records.map(r => ({
       rawData:   r.rawData || '',
@@ -68,32 +73,28 @@ async function exportToGoogleSheets(records) {
   try {
     showToast('Đang gửi lên Google Sheets...', '', 2000);
 
-    const resp = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload),
     });
 
-    // no-cors → opaque response, không đọc được kết quả
-    // nhưng nếu không throw error thì request đã gửi thành công
     showToast(`Đã gửi ${records.length} bản ghi lên Google Sheets ✓`, 'success', 3000);
 
   } catch (err) {
     console.error('[GS Export Error]', err);
     showToast('Lỗi gửi dữ liệu: ' + err.message, 'error', 4000);
 
-    // Nếu lỗi, cho user nhập lại URL
     if (confirm('Gửi thất bại. Bạn muốn nhập lại URL Apps Script?')) {
       promptGSUrl();
     }
   }
 }
 
-// Cho phép reset URL từ console hoặc settings
 function resetGSUrl() {
   localStorage.removeItem(GS_URL_KEY);
-  showToast('Đã xóa URL Google Sheets', 'warning');
+  showToast('Đã xóa URL Google Sheets — sẽ dùng URL mặc định', 'warning');
 }
 
 window.exportToGoogleSheets = exportToGoogleSheets;
