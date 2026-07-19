@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\ADMIN\\\\Documents\\\\Work\\\\cccd-scanner\\\\css\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\ADMIN\\\\Documents\\\\Work\\\\cccd-scanner\\\\js\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\ADMIN\\\\Documents\\\\Work\\\\cccd-scanner\\\\libs\")"
+    ]
+  }
+}
